@@ -1,14 +1,22 @@
 #version 460 core
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(rgba32f, binding = 0) uniform image2D screen;
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-void main()
-{
-    ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
-    vec4 gradient_color = vec4(float(pixel_coords.x) / float(imageSize(screen).x),
-                               float(pixel_coords.y) / float(imageSize(screen).y),
-                               0.0,
-                               1.0);
-    imageStore(screen, pixel_coords, gradient_color);
+layout(binding = 0, rgba32f) uniform image2D screen_image;
+
+int screen_width;
+int screen_height;
+
+// Define the solid color (RGBA format)
+const vec4 solidColor = vec4(0.0, 0.0, 1.0, 1.0); // Blue color
+
+void main() {
+    uvec3 id = gl_GlobalInvocationID;
+    if (id.x >= screen_width || id.y >= screen_height) {
+        return;
+    }
+
+    // Set the pixel color to the solid color
+    ivec2 pixel_coords = ivec2(id.xy);
+    imageStore(screen_image, pixel_coords, solidColor);
 }

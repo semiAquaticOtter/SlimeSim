@@ -1,0 +1,24 @@
+'''
+agents = [Agent().to_struct for _ in range(numAgents)]
+for i in range(numAgents):
+    center = Vec2(width/2, height/2)
+    random_angle = random.uniform(0.0, 360.0)
+    startPos = Vec2(0.5, 0.5)
+    agents[i] = Agent(startPos, random_angle)
+
+flattened_data = []
+for agent_struct in agents:
+    # print(agent_struct.pos.x)
+    flattened_data.append(agent_struct.pos.x)
+    # print(agent_struct.pos.y)
+    flattened_data.append(agent_struct.pos.y)
+    # print(agent_struct.angle)
+    flattened_data.append(agent_struct.angle)
+
+flattened_data = np.array(flattened_data)
+print(flattened_data.dtype)
+
+ssbo = glGenBuffers(1)
+glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo)
+glBufferData(GL_SHADER_STORAGE_BUFFER, flattened_data.nbytes, flattened_data, GL_STATIC_DRAW)
+'''
