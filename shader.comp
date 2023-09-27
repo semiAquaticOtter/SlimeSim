@@ -1,22 +1,149 @@
-#version 460 core
+    #version 460 core
 
-layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+    layout (local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
 
-layout(binding = 0, rgba32f) uniform image2D screen_image;
+    layout(binding = 0, rgba32f) uniform image2D trailmap;
 
-int screen_width;
-int screen_height;
+    layout(std140, binding = 1) buffer AgentsBuffer {
+        vec3 data[];
+    };
 
-// Define the solid color (RGBA format)
-const vec4 solidColor = vec4(0.0, 0.0, 1.0, 1.0); // Blue color
+    uniform int width;  
+    uniform int height;
+    uniform float deltaTime;
+    uniform int numAgents;
+    //uniform float dimStrength;
+    vec4 colour = vec4(1.0, 1.0, 1.0, 1.0);
 
-void main() {
-    uvec3 id = gl_GlobalInvocationID;
-    if (id.x >= screen_width || id.y >= screen_height) {
-        return;
+    float sensorAngleOffset = 60;
+    float sensorOffsetDist = 10;
+    int sensorSize = 5;
+    float turnspeed = 1.0;
+
+    float dimStrength = 0.0002;
+    float diffuseWeight = .4;
+
+    uint hash(uint state)
+    {
+        state ^= 2747636419u;
+        state *= 2654435769u;
+        state ^= state >> 16;
+        state *= 2654435769u;
+        state ^= state >> 16;
+        state *= 2654435769u;
+        return state;
     }
 
-    // Set the pixel color to the solid color
-    ivec2 pixel_coords = ivec2(id.xy);
-    imageStore(screen_image, pixel_coords, solidColor);
-}
+    float scaleToRange01(uint state)
+    {
+        return state / 4294967295.0;
+    }
+
+    float sense_old(vec3 agent, float offset, int sensorSize) {
+        float sensorAngle = agent.z + offset;
+        vec2 dir = vec2(cos(sensorAngle), sin(sensorAngle));
+
+        ivec2 sensorPos = ivec2(agent.xy + dir * sensorOffsetDist);
+
+        vec4 sum1 = vec4(0.0);
+
+        for (int offsetX = -sensorSize; offsetX <= sensorSize; offsetX ++) {
+            for (int offsetY = -sensorSize; offsetY <= sensorSize; offsetY ++) {
+                int sampleX = min(width - 1, max(0, sensorPos.x + offsetX));
+                int sampleY = min(height - 1, max(0, sensorPos.y + offsetY));
+                sum1 += imageLoad(trailmap, ivec2(offsetX, offsetY));
+            }
+        }
+
+        return sum1.r;
+    }
+
+    float sense(vec3 agent, float offset, int sensorSize, ivec2 pc) {
+        float sensorAngle = agent.z + offset;
+        vec2 dir = vec2(15*cos(sensorAngle),15*sin(sensorAngle));
+
+        vec4 sum;
+
+        for (int senseX = -sensorSize; senseX <= sensorSize; senseX ++) {
+            for (int senseY = -sensorSize; senseY <= sensorSize; senseY ++) {
+                sum += imageLoad(trailmap, ivec2(pc.x + senseY, pc.y + senseY));
+            }
+        }
+
+        return sum.r / sensorSize*sensorSize;
+    }
+
+    void main() {
+        uvec3 id = gl_GlobalInvocationID;
+        ivec2 pc = ivec2(gl_GlobalInvocationID.xy);
+        if (id.x < 0 || id.x >= width || id.y >= height){return;}
+
+        float agentAngle = mod(data[id.x].z, 2.0 * 3.14159265359);
+        vec2 agentPosition = data[id.x].xy;
+
+        vec3 v3zeros = vec3(0.0);
+
+        // dim the whole image
+        vec4 currentCol = imageLoad(trailmap, pc);
+        // vec4 dakenedColor = vec4(currentCol.rgb * dimStrength, 1.0);
+        // blur the whole image
+        vec4 sum;
+        for (int x = -1; x <= 1; x ++) {
+            for (int y = -1; y <= 1; y ++) {
+                int sx = min(width-1, max(0, pc.x + x));
+                int sy = min(height-1, max(0, pc.y + y));
+                sum += imageLoad(trailmap, ivec2(sx, sy));
+            }
+        }
+
+        vec4 blurCol = sum / 9;
+        // blurCol = currentCol * (1-diffuseWeight) + blurCol * (diffuseWeight);
+        blurCol = mix(currentCol, blurCol, 0.13);
+        blurCol = vec4(vec3(max(0, blurCol.x - dimStrength)), 1.0);
+        // imageStore(trailmap, pc, vec4(blurCol.xyz, 1.0));
+
+        uint random = hash(uint(data[id.x].x * data[id.x].x / id.x));
+
+        float senseAngleRad = sensorAngleOffset * (3.1415 / 180);
+        float wf = sense(vec3(agentPosition, agentAngle), 0, sensorSize, pc);
+        float wl = sense(vec3(agentPosition, agentAngle), senseAngleRad, sensorSize, pc);
+        float wr = sense(vec3(agentPosition, agentAngle), -senseAngleRad, sensorSize, pc);
+
+        float randomSteerStrength = scaleToRange01(random);
+
+        if (wf > wl && wf > wr) {
+            agentAngle += 0;
+        }
+        else if (wf < wl && wf < wr) {
+            agentAngle += 0;
+        }
+        else if (wr < wl) {
+            data[id.x].z -= randomSteerStrength * turnspeed;
+            // agentAngle -= turnspeed;
+        }
+        else if (wl < wr) {
+            data[id.x].z += randomSteerStrength * turnspeed;
+            // agentAngle += turnspeed;
+        }
+
+        // get direction and calculate new position
+        vec2 direction = vec2(cos(agentAngle), sin(agentAngle));
+        vec2 newPos = agentPosition + direction * vec2(0.01) * deltaTime;
+
+        // write agent to screen
+        ivec2 pixCoord = ivec2(agentPosition * vec2(width, height));
+        imageStore(trailmap, pixCoord, colour);
+
+        // check if agent is past the edge of the screen
+        if (newPos.x >= 1 || newPos.x <= 0) {
+            agentAngle = 3.14159265359 - data[id.x].z;
+        }
+        if (newPos.y <= 0 || newPos.y >= 1) {
+            agentAngle = data[id.x].z - 2.0 * dot(data[id.x].z, 1) * 1;
+        }
+
+        // update agent
+        data[id.x].x = newPos.x;
+        data[id.x].y = newPos.y;
+        data[id.x].z = agentAngle;  
+    }

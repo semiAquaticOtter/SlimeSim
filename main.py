@@ -2,7 +2,6 @@ import pygame as pg
 from pygame.locals import *
 
 from OpenGL.GL import *
-from OpenGL.GL.ARB import shader_storage_buffer_object
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
@@ -13,13 +12,23 @@ from ctypes import sizeof, c_float, Structure, byref, c_void_p
 import numpy as np
 import random
 import math
+import time
+from tqdm import trange
 
 #SECTION - Varibles
 
 # width, height
 width, height = 720, 480
 displaySize = (width, height)
-numAgents = 100
+numAgents = 30000 # 10*(10**3)
+dimStrength = 1
+
+scaleing = 1
+
+lrw, lrh = int(width*scaleing), int(height*scaleing)
+
+start_time = time.time()
+previous_time = start_time
 
 #!SECTION - Varibles
 #SECTION - Dataclasses
@@ -70,11 +79,53 @@ class Agent2:
         self.x = x
         self.y = y
         self.angle = angle
-    
+
+   
 #!SECTION - Dataclasses
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
 #SECTION - Start
+
+# agentsArray = [
+#     Agent2(random.uniform(0.2, 0.8), random.uniform(0.2, 0.8), random.uniform(0, 2 * math.pi)) for _ in range(numAgents)
+# ]
+print(f"""
+      Generating {numAgents} agents.
+      This may take some time if theres a lot.
+""")
+# printProgressBar(0, numAgents, prefix = 'Progress:', suffix = 'Complete', length = 50)
+agentsArray = []
+for i in trange(numAgents):
+    x = random.uniform(0.2, 0.8)
+    y = random.uniform(0.2, 0.8)
+    angle = random.uniform(0, 2 * math.pi)
+    agent = Agent2(x, y, angle)
+    agentsArray.append(agent)
+    # printProgressBar(i + 1, numAgents, prefix = 'Progress:', suffix = 'Complete', length = 50)
+
+print("converting to numpy array")
+npAgentsArray = np.array([(agent.x, agent.y, agent.angle) for agent in agentsArray], dtype=np.float32)
+
 pg.init()
-pg.display.set_mode(displaySize, pg.DOUBLEBUF|pg.OPENGL)
+pg.display.set_mode(displaySize, OPENGL | DOUBLEBUF)
 
 gl_version = glGetString(GL_VERSION)
 print(gl_version.decode('utf-8'))
@@ -85,18 +136,21 @@ if pg.get_error() != "":
     quit()
 
 #ANCHOR - Vertex Shader
+print("compiling vertex shader")
 vertexSource = open("./shader.vert", "r")
 vertexShader = glCreateShader(GL_VERTEX_SHADER)
 glShaderSource(vertexShader, vertexSource)
 glCompileShader(vertexShader)
 
 #ANCHOR - Fragment Shader
+print("compiling fragment shader")
 fragmentSource = open("./shader.frag", "r")
 fragmentShader = glCreateShader(GL_FRAGMENT_SHADER)
 glShaderSource(fragmentShader, fragmentSource)
 glCompileShader(fragmentShader)
 
 #ANCHOR - Compute Shader
+print("compiling compute shader")
 computeSource = open("./shader.comp", "r")
 computeShader = glCreateShader(GL_COMPUTE_SHADER)
 glShaderSource(computeShader, computeSource)
@@ -154,12 +208,12 @@ if glGetProgramiv(compute_program, GL_LINK_STATUS) != GL_TRUE:
 #ANCHOR - creating the render texture
 trailmap = glGenTextures(1)
 glBindTexture(GL_TEXTURE_2D, trailmap)
-glTextureParameteri(trailmap, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 glTextureParameteri(trailmap, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+glTextureParameteri(trailmap, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 glTextureParameteri(trailmap, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
 glTextureParameteri(trailmap, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
 
-glTextureStorage2D(trailmap, 1, GL_RGBA32F, width, height)
+glTextureStorage2D(trailmap, 1, GL_RGBA32F, lrw, lrh)
 glBindImageTexture(0, trailmap, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F)
 
 def random_inside_unit_circle():
@@ -167,29 +221,32 @@ def random_inside_unit_circle():
         x = random.uniform(-1, 1)
         y = random.uniform(-1, 1)
         if x**2 + y**2 <= 1:
-            return Vec2(x, y)
+            # Normalize the coordinates to [0, 1]
+            magnitude = math.sqrt(x**2 + y**2)
+            x_normalized = (x + 1) / 2
+            y_normalized = (y + 1) / 2
+            return Vec2(x_normalized, y_normalized)
 
 #ANCHOR - Create agent array
-agentsArray = [Agent2(random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 2 * math.pi)) for _ in range(numAgents)]
-npAgentsArray = np.array([(agent.x, agent.y, agent.angle) for agent in agentsArray], dtype=np.float32)
+# agentsArray = [Agent2(random.uniform(0.2, 0.8), random.uniform(0.2, 0.8), random.uniform(0, 2 * math.pi)) for _ in range(numAgents)]
+# npAgentsArray = np.array([(agent.x, agent.y, agent.angle) for agent in agentsArray], dtype=np.float32)
 
-ubo = glGenBuffers(1)
-glBindBuffer(GL_UNIFORM_BUFFER, ubo)
-glBufferData(GL_UNIFORM_BUFFER, npAgentsArray.nbytes, npAgentsArray, GL_DYNAMIC_DRAW)
+ssbo = glGenBuffers(1)
+glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo)
+glBufferData(GL_SHADER_STORAGE_BUFFER, len(npAgentsArray) * sizeof(GLfloat) * 3, npAgentsArray, GL_DYNAMIC_DRAW)
 
-UBO_bindPoint = 0
-glBindBufferBase(GL_UNIFORM_BUFFER, UBO_bindPoint, ubo)
-# print(flattened_data)
+ssbo_bindPoint = 1
+glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssbo_bindPoint, ssbo)
 
 #ANCHOR - Triangles?
 vertices =np.array([
     # Vertex positions (x, y) followed by texture coordinates (u, v)
     -1.0, -1.0, 0.0, 0.0,
-    -1.0, 1.0, 0.0, 1.0,
-    1.0, 1.0, 1.0, 1.0, 
+    -1.0,  1.0, 0.0, 1.0,
+     1.0,  1.0, 1.0, 1.0, 
     -1.0, -1.0, 0.0, 0.0,
-    1.0, 1.0, 1.0, 1.0,
-    1.0, -1.0, 1.0, 0.0
+     1.0,  1.0, 1.0, 1.0,
+     1.0, -1.0, 1.0, 0.0
 ], dtype=np.float32)
 
 quad_vao = glGenVertexArrays(1)
@@ -197,9 +254,9 @@ glBindVertexArray(quad_vao)
 
 quad_vbo = glGenBuffers(1)
 glBindBuffer(GL_ARRAY_BUFFER, quad_vbo)
-glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW)
+glBufferData(GL_ARRAY_BUFFER, vertices, GL_DYNAMIC_DRAW)
 
-glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), None)
+glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), None)
 glEnableVertexAttribArray(0)
 
 glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), c_void_p(2 * sizeof(GLfloat)))
@@ -207,27 +264,46 @@ glEnableVertexAttribArray(1)
 
 #!SECTION - Start
 
-fbo = glGenFramebuffers(1)
+def check_gl_error():
+    error_code = glGetError()
+    if error_code != GL_NO_ERROR:
+        print(f"OpenGL error: {error_code}")
+
+print(npAgentsArray)
 
 if __name__ == "__main__":
+    clock = pg.time.Clock()
     while True:
+        # current_time = time.time()
+        # delta_time = current_time - previous_time
+        dt = clock.tick()/1000
+        # pg.time.Clock.get_time()/1000
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 #NOTE - exit stuff
                 # glDeleteBuffers(1, [ssbo])
                 pg.quit()
                 quit()
+            elif event.type == pg.KEYDOWN and event.key == K_ESCAPE:
+                pg.quit()
+                quit()
 
         glUseProgram(compute_program)
-        # glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo)
-        glUniform1ui(glGetUniformLocation(compute_program, "numAgents"), numAgents)
-        glUniform1i(glGetUniformLocation(compute_program, "trailmap_width"), width)
-        glUniform1i(glGetUniformLocation(compute_program, "trailmap_height"), height)
+        # glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo)
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssbo_bindPoint, ssbo)
+        glUniform1i(glGetUniformLocation(compute_program, "numAgents"), numAgents)
+        glUniform1i(glGetUniformLocation(compute_program, "width"), width)
+        glUniform1i(glGetUniformLocation(compute_program, "height"), height)
+        glUniform1f(glGetUniformLocation(compute_program, "deltaTime"), dt)
+        glUniform1f(glGetUniformLocation(compute_program, "dimStrength"), dimStrength)
         glDispatchCompute(width, height, 1)
-        glMemoryBarrier(GL_ALL_BARRIER_BITS)
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT)
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo)
+        # glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, len(npAgentsArray) * sizeof(GLfloat) * 3, npAgentsArray)
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
-        glViewport(0, 0, width, height)
+        glViewport(0, 0, lrw, lrh)
         glClear(GL_COLOR_BUFFER_BIT)
 
         error_code = glGetError()
@@ -244,4 +320,8 @@ if __name__ == "__main__":
         glBindTexture(GL_TEXTURE_2D, trailmap)
         glDrawArrays(GL_TRIANGLES, 0, 6)
 
+        # print(delta_time)
+        # print("Buffer Data:", np.frombuffer(npAgentsArray, dtype=np.float32))
+
+        check_gl_error()
         pg.display.flip()
