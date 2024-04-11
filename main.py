@@ -15,12 +15,12 @@ import math
 import time
 from tqdm import trange
 
-#SECTION - Varibles
+from datetime import datetime, timedelta
 
-# width, height
+#MARK: vars
 width, height = 720, 480
 displaySize = (width, height)
-numAgents = 30000 # 10*(10**3)
+numAgents = 10000000 # 10*(10**3)
 dimStrength = 1
 
 scaleing = 1
@@ -30,9 +30,6 @@ lrw, lrh = int(width*scaleing), int(height*scaleing)
 start_time = time.time()
 previous_time = start_time
 
-#!SECTION - Varibles
-#SECTION - Dataclasses
-#ANCHOR - Vector 2
 @dataclass
 class Vec2:
     x: float
@@ -108,7 +105,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
 #     Agent2(random.uniform(0.2, 0.8), random.uniform(0.2, 0.8), random.uniform(0, 2 * math.pi)) for _ in range(numAgents)
 # ]
 print(f"""
-      Generating {numAgents} agents.
+      Generating {numAgents:,d} agents.
       This may take some time if theres a lot.
 """)
 # printProgressBar(0, numAgents, prefix = 'Progress:', suffix = 'Complete', length = 50)
@@ -239,7 +236,7 @@ ssbo_bindPoint = 1
 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, ssbo_bindPoint, ssbo)
 
 #ANCHOR - Triangles?
-vertices =np.array([
+vertices = np.array([
     # Vertex positions (x, y) followed by texture coordinates (u, v)
     -1.0, -1.0, 0.0, 0.0,
     -1.0,  1.0, 0.0, 1.0,
@@ -269,15 +266,13 @@ def check_gl_error():
     if error_code != GL_NO_ERROR:
         print(f"OpenGL error: {error_code}")
 
-print(npAgentsArray)
+# print(npAgentsArray)
 
 if __name__ == "__main__":
     clock = pg.time.Clock()
     while True:
-        # current_time = time.time()
-        # delta_time = current_time - previous_time
-        dt = clock.tick()/1000
-        # pg.time.Clock.get_time()/1000
+        t = clock.tick(60)
+        dt = t/1000
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 #NOTE - exit stuff
@@ -325,3 +320,5 @@ if __name__ == "__main__":
 
         check_gl_error()
         pg.display.flip()
+
+        
