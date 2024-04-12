@@ -22,10 +22,10 @@ float sensorOffsetDist = 15;
 int sensorSize = 3;
 float turnspeed = 100*(3.14159/180);
 
-float dimStrength = 0.0004;
-float diffuseWeight = .4;
+float dimStrength = 0.0009;
+float diffuseWeight = .13;
 
-
+// Hash function www.cs.ubc.ca/~rbridson/docs/schechter-sca08-turbulence.pdf
 uint hash(uint state)
 {
     state ^= 2747636419u;
@@ -69,6 +69,7 @@ float sense(vec2 agent, float angle, float offset, int sensorSize, ivec2 pc, vec
 
 
 
+
 void main() {
     uvec3 id = gl_GlobalInvocationID;
     ivec2 pc = ivec2(gl_GlobalInvocationID.xy);
@@ -91,7 +92,7 @@ void main() {
     }
 
     vec4 blurCol = sum / 9;
-    blurCol = mix(currentCol, blurCol, 0.13);
+    blurCol = mix(currentCol, blurCol, diffuseWeight);
     blurCol = vec4(
         max(0, blurCol.x - dimStrength),
         max(0, blurCol.y - dimStrength),
@@ -103,6 +104,7 @@ void main() {
     
 
     uint random = hash(uint(data[id.x].x * data[id.x].x / id.x));
+    float randSteer = scaleToRange01(random);
 
     float wf = sense(agentPosition, agentAngle,                 0,  sensorSize, pixCoord, vec4(0.0));
     float wl = sense(agentPosition, agentAngle, sensorAngleOffset,  sensorSize, pixCoord, vec4(1.0));
@@ -115,17 +117,17 @@ void main() {
         agentAngle += 0;
     }
     else if (wr < wl) {
-        data[id.x].z += turnspeed * deltaTime;
+        data[id.x].z += turnspeed * randSteer * deltaTime;
         // agentAngle += turnspeed * deltaTime;
     }
     else if (wr > wl) {
-        data[id.x].z -= turnspeed * deltaTime;
+        data[id.x].z -= turnspeed * randSteer * deltaTime;
         // agentAngle -= turnspeed * deltaTime;
     }
 
     // get direction and calculate new position
     vec2 direction = vec2(cos(agentAngle), sin(agentAngle));
-    vec2 newPos = agentPosition + direction*deltaTime * vec2(0.01);
+    vec2 newPos = agentPosition + direction*deltaTime * vec2(0.03);
     
     // write agent to screen
     pixCoord = ivec2(agentPosition * vec2(width, height));

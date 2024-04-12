@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 #MARK: vars
 width, height = 720, 480
 displaySize = (width, height)
-numAgents = 10000000 # 10*(10**3)
+numAgents = 2500000 # 10*(10**3)
 dimStrength = 1
 
 scaleing = 1
@@ -76,8 +76,7 @@ class Agent2:
         self.x = x
         self.y = y
         self.angle = angle
-
-   
+  
 #!SECTION - Dataclasses
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """
@@ -101,9 +100,6 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
         print()
 #SECTION - Start
 
-# agentsArray = [
-#     Agent2(random.uniform(0.2, 0.8), random.uniform(0.2, 0.8), random.uniform(0, 2 * math.pi)) for _ in range(numAgents)
-# ]
 print(f"""
       Generating {numAgents:,d} agents.
       This may take some time if theres a lot.
@@ -111,9 +107,11 @@ print(f"""
 # printProgressBar(0, numAgents, prefix = 'Progress:', suffix = 'Complete', length = 50)
 agentsArray = []
 for i in trange(numAgents):
-    x = random.uniform(0.2, 0.8)
-    y = random.uniform(0.2, 0.8)
-    angle = random.uniform(0, 2 * math.pi)
+    # x = random.uniform(0.0, 1.0)
+    # y = random.uniform(0.0, 1.0)
+    x = 0.5
+    y = 0.5
+    angle = 0
     agent = Agent2(x, y, angle)
     agentsArray.append(agent)
     # printProgressBar(i + 1, numAgents, prefix = 'Progress:', suffix = 'Complete', length = 50)
